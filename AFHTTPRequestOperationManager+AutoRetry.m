@@ -3,7 +3,7 @@
 
 #import "AFHTTPRequestOperationManager+AutoRetry.h"
 #import "ObjcAssociatedObjectHelpers.h"
-
+#import "AFNetworkReachabilityManager.h"
 #pragma clang diagnostic push
 #pragma ide diagnostic ignored "OCUnusedMethodInspection"
 
@@ -12,6 +12,20 @@
 
 SYNTHESIZE_ASC_OBJ(__operationsDict, setOperationsDict);
 SYNTHESIZE_ASC_OBJ(__retryDelayCalcBlock, setRetryDelayCalcBlock);
+
+- (BOOL)isSkipRetry:(AFHTTPRequestOperation*)operation{
+    if(![[AFNetworkReachabilityManager sharedManager] isReachable]){
+        return YES;
+    }
+    if(!operation){
+        return YES;
+    }
+    NSInteger status_code = operation.response ? operation.response.statusCode : 0;
+    if(400 <= status_code && status_code < 500){
+        return YES;
+    }
+    return NO;
+}
 
 - (void)createOperationsDict {
     [self setOperationsDict:[[NSDictionary alloc] init]];
@@ -47,7 +61,9 @@ SYNTHESIZE_ASC_OBJ(__retryDelayCalcBlock, setRetryDelayCalcBlock);
         NSMutableDictionary *retryOperationDict = self.operationsDict[request];
         int originalRetryCount = [retryOperationDict[@"originalRetryCount"] intValue];
         int retriesRemainingCount = [retryOperationDict[@"retriesRemainingCount"] intValue];
-        if (retriesRemainingCount > 0) {
+        
+        
+        if (retriesRemainingCount > 0 && ![self isSkipRetry:operation]) {
             NSLog(@"AutoRetry: Request failed: %@, retry %d out of %d begining...",
                     error.localizedDescription, originalRetryCount - retriesRemainingCount + 1, originalRetryCount);
             AFHTTPRequestOperation *retryOperation = [self HTTPRequestOperationWithRequest:request
